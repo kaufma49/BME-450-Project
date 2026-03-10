@@ -2,7 +2,7 @@
 # Deep Learning Classification of ECG Arrhythmias
 
 ## Team Members
-Maggie (kaufma49), Lara (GitHubUsername)
+Maggie (kaufma49), Lara (laratmuniz)
 
 ## Project Description
 
