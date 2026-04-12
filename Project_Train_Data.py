@@ -15,14 +15,20 @@ from sklearn.metrics import precision_score, recall_score, confusion_matrix
 
 # DATASET CLASS
 
-class ECGDataset(Dataset):
-    def __init__(self, csv_file):
+class ECGDataset(torch.utils.data.Dataset):
+    def __init__(self, csv_file, label_override=None):
+
         data = pd.read_csv(csv_file, header=None)
 
-        self.X = data.iloc[:, :-1].values.astype(np.float32)
-        self.y = data.iloc[:, -1].values.astype(np.int64)
+        self.X = data.iloc[:, :-1].values.astype("float32")
 
-        # normalize each heartbeat
+        # use labels inside file OR override
+        if label_override is None:
+            self.y = data.iloc[:, -1].values.astype("int64")
+        else:
+            self.y = np.full(len(self.X), label_override)
+
+        # normalize each ECG beat
         self.X = (self.X - self.X.mean(axis=1, keepdims=True)) / \
                  (self.X.std(axis=1, keepdims=True) + 1e-8)
 
@@ -30,15 +36,15 @@ class ECGDataset(Dataset):
         return len(self.y)
 
     def __getitem__(self, idx):
-        signal = torch.tensor(self.X[idx]).unsqueeze(0)  # (1,187)
+        signal = torch.tensor(self.X[idx]).unsqueeze(0)
         label = torch.tensor(self.y[idx])
         return signal, label
 
 
 # LOAD DATA
 
-train_data = ECGDataset("mitbih_train.csv")
-test_data = ECGDataset("mitbih_test.csv")
+train_data = ECGDataset(r"C:/Users/Maggie/OneDrive/Documents/BME 450/Final Project/mitbih_train.csv")
+test_data = ECGDataset(r"C:/Users/Maggie/OneDrive/Documents/BME 450/Final Project/mitbih_test.csv")
 
 print("Training samples:", len(train_data))
 print("Test samples:", len(test_data))
@@ -167,4 +173,5 @@ with torch.no_grad():
 
 print("Raw output:", output)
 print("Predicted class:", torch.argmax(output).item())
+print("True class:", label.item())(output).item())
 print("True class:", label.item())
