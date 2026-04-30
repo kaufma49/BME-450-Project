@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import precision_score, recall_score, confusion_matrix
 
 
-# DATASET CLASS
+
+# DATASET
 
 class ECGDataset(torch.utils.data.Dataset):
     def __init__(self, csv_file, label_override=None):
@@ -22,13 +23,12 @@ class ECGDataset(torch.utils.data.Dataset):
 
         self.X = data.iloc[:, :-1].values.astype("float32")
 
-        # use labels inside file OR override
         if label_override is None:
             self.y = data.iloc[:, -1].values.astype("int64")
         else:
             self.y = np.full(len(self.X), label_override)
 
-        # normalize each ECG beat
+        # per-beat normalization
         self.X = (self.X - self.X.mean(axis=1, keepdims=True)) / \
                  (self.X.std(axis=1, keepdims=True) + 1e-8)
 
@@ -41,16 +41,17 @@ class ECGDataset(torch.utils.data.Dataset):
         return signal, label
 
 
+
 # LOAD DATA
 
 train_data = ECGDataset(r"C:/Users/Maggie/OneDrive/Documents/BME 450/Final Project/mitbih_train.csv")
-test_data = ECGDataset(r"C:/Users/Maggie/OneDrive/Documents/BME 450/Final Project/mitbih_test.csv")
+test_data  = ECGDataset(r"C:/Users/Maggie/OneDrive/Documents/BME 450/Final Project/mitbih_test.csv")
 
 print("Training samples:", len(train_data))
 print("Test samples:", len(test_data))
 
 
-# VISUALIZE SAMPLE ECG
+# SAMPLE VISUALIZATION
 
 sample_signal, sample_label = train_data[0]
 
@@ -61,11 +62,11 @@ plt.ylabel("Amplitude")
 plt.show()
 
 
-# MODEL DEFINITION (1D CNN)
+# MODEL
 
 class ECGNet(nn.Module):
     def __init__(self, num_classes=5):
-        super(ECGNet, self).__init__()
+        super().__init__()
 
         self.conv1 = nn.Conv1d(1, 16, kernel_size=5, padding=2)
         self.conv2 = nn.Conv1d(16, 32, kernel_size=5, padding=2)
@@ -86,13 +87,11 @@ class ECGNet(nn.Module):
 
 
 # TRAIN LOOP
-
 def train_loop(dataloader, model, loss_fn, optimizer):
     model.train()
     size = len(dataloader.dataset)
 
     for batch, (X, y) in enumerate(dataloader):
-
         pred = model(X)
         loss = loss_fn(pred, y)
 
@@ -100,33 +99,27 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
 
-        current = (batch + 1) * len(X)
-        print(f"loss: {loss.item():>7f} [{current}/{size}]")
+        print(f"loss: {loss.item():.6f}")
 
 
 # TEST LOOP
-
 def test_loop(dataloader, model, loss_fn):
 
     model.eval()
 
-    total_loss = 0
     correct = 0
-
     all_preds = []
     all_labels = []
 
     with torch.no_grad():
         for X, y in dataloader:
             pred = model(X)
-
-            total_loss += loss_fn(pred, y).item()
             predicted = pred.argmax(1)
 
             correct += (predicted == y).sum().item()
 
-            all_preds.extend(predicted.numpy())
-            all_labels.extend(y.numpy())
+            all_preds.extend(predicted.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
 
     accuracy = correct / len(dataloader.dataset)
 
@@ -139,9 +132,24 @@ def test_loop(dataloader, model, loss_fn):
     print(f"Recall: {recall:.3f}")
     print("Confusion Matrix:\n", cm)
 
+    
+    # PLOT CONFUSION MATRIX
+    
+    plt.figure(figsize=(6, 5))
+    plt.imshow(cm, cmap="Blues")
+    plt.title("Confusion Matrix")
+    plt.xlabel("Predicted Class")
+    plt.ylabel("True Class")
+    plt.colorbar()
 
-# TRAINING SETUP
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            plt.text(j, i, cm[i, j], ha="center", va="center", color="black")
 
+    plt.show()
+
+
+# SETUP
 model = ECGNet(num_classes=5)
 
 batch_size = 64
@@ -154,24 +162,50 @@ optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 
 # TRAINING
-
 epochs = 15
+train_losses = []
 
 for epoch in range(epochs):
     print(f"\nEpoch {epoch+1}\n----------------------")
-    train_loop(train_loader, model, loss_fn, optimizer)
+
+    model.train()
+    epoch_loss = 0
+
+    for X, y in train_loader:
+        pred = model(X)
+        loss = loss_fn(pred, y)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        epoch_loss += loss.item()
+
+    avg_loss = epoch_loss / len(train_loader)
+    train_losses.append(avg_loss)
+
+    print("Epoch loss:", avg_loss)
+
     test_loop(test_loader, model, loss_fn)
 
 print("Done!")
 
 
-# FINAL PREDICTION
+# TRAINING CURVE
+plt.plot(train_losses)
+plt.title("Training Loss vs Epoch")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.grid(True)
+plt.show()
 
+
+# FINAL PREDICTION
 with torch.no_grad():
     signal, label = test_data[0]
     output = model(signal.unsqueeze(0))
 
 print("Raw output:", output)
 print("Predicted class:", torch.argmax(output).item())
-print("True class:", label.item())(output).item())
 print("True class:", label.item())
+       
